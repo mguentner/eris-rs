@@ -1,0 +1,19 @@
+[package]
+name = "eris-rs"
+description = "rust implementation of the Encoding for Robust Immutable Storage (ERIS) spec draft"
+version = "0.1.0"
+authors = ["Maximilian Güntner <code@sourcediver.org>"]
+edition = "2021"
+license = "AGPL-3.0-only"
+repository = "https://github.com/mguentner/eris-rs/"
+exclude = ["src/tests/eris-test-vectors"]
+
+[dependencies]
+base32 = "~0.4.0"
+blake2b_simd = "1.0.0"
+chacha20 = "~0.8.1"
+hex-literal = "0.3.1"
+
+[dev-dependencies]
+serde = {version = "~1.0.0", features = ["derive"] }
+serde_json = "~1.0.0"
