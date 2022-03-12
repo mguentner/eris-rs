@@ -9,7 +9,16 @@ Like the spec, this library does not implement storage backends or networking.
 The library implements the spec in version 0.3.0 and successfully passes all test vectors
 and test streams generated through `ChaCha20` (see "5.2. Large content" in spec).
 
-TODOs:
+# Notes
+
+When running the tests, make sure to use `release` builds as the performance will increase
+by a factor of 100 (!):
+
+```
+cargo test --release
+```
+
+# TODOs
 
 * add some benches
 * improve performance
