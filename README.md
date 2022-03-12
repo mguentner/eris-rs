@@ -1,5 +1,8 @@
 # eris-rs
 
+[![Pipeline](https://github.com/mguentner/eris-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/mguentner/eris-rs/actions/workflows/rust.yml)
+[![Crates.io](https://img.shields.io/crates/v/eris-rs.svg)](https://crates.io/crates/eris-rs)
+
 rust implementation of the *Encoding for Robust Immutable Storage* (ERIS) [spec draft](https://eris.codeberg.page/spec/).
 
 Like the spec, this library does not implement storage backends or networking.
@@ -21,8 +24,6 @@ cargo test --release
 # TODOs
 
 * add some benches
-* improve performance
-* publish on crates.io
 
 # Copyright & License
 
