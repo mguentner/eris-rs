@@ -1,3 +1,5 @@
 This folder contains the test vectors for the ERIS encoding.
 
 See http://purl.org/eris for more information.
+
+Test vectors are made available under the CC0 license. You may include the test vectors in the distribution of your implementation.
