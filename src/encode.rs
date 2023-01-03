@@ -20,16 +20,32 @@ struct EncryptBlockReturn {
     key: Key,
 }
 
-fn encrypt_block(input: &[u8], convergence_secret: &[u8]) -> EncryptBlockReturn {
+fn encrypt_leaf_node(input: &[u8], convergence_secret: &[u8]) -> EncryptBlockReturn {
     let key_slice = &blake2b256_hash(input, Some(convergence_secret));
     let key = ChaChaKey::from_slice(key_slice);
+    let nonce = Nonce::from_slice(&[0; 12]); // 96-bit is set to zero, section 2.1.2
 
     let mut encrypted_block = Vec::from(input);
-
-    let nonce = Nonce::from_slice(&[0; 12]); // 96-bit is set to zero, section 2.1.2
     let mut cipher = ChaCha20::new(key, nonce);
     cipher.apply_keystream(&mut encrypted_block);
+    let reference = blake2b256_hash(&encrypted_block, None);
 
+    return EncryptBlockReturn {
+        encrypted_block: encrypted_block,
+        reference: reference,
+        key: *key_slice,
+    };
+}
+
+fn encrypt_internal_node(input: &[u8], level: u8) -> EncryptBlockReturn {
+    let key_slice = &blake2b256_hash(input, None);
+    let key = ChaChaKey::from_slice(key_slice);
+    let nonce_slice = &[level, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let nonce = Nonce::from_slice(nonce_slice);
+
+    let mut encrypted_block = Vec::from(input);
+    let mut cipher = ChaCha20::new(key, nonce);
+    cipher.apply_keystream(&mut encrypted_block);
     let reference = blake2b256_hash(&encrypted_block, None);
 
     return EncryptBlockReturn {
@@ -78,7 +94,7 @@ fn split_content(
         while bytes_read < block_size_bytes {
             let n = match content.read(&mut buffer[bytes_read..]) {
                 Ok(v) => v,
-                Err(e) => return Err(e)
+                Err(e) => return Err(e),
             };
             if n == 0 {
                 last_block = true;
@@ -97,7 +113,7 @@ fn split_content(
         }
         blocks_to_write.push(&buffer);
         for block in blocks_to_write {
-            match encrypt_block(block, convergence_secret) {
+            match encrypt_leaf_node(block, convergence_secret) {
                 EncryptBlockReturn {
                     encrypted_block,
                     reference,
@@ -168,13 +184,13 @@ impl Iterator for RKPairPacker {
 
 fn collect_rk_pairs(
     input_pairs: Vec<ReferenceKeyPair>,
-    convergence_secret: &[u8],
+    level: u8,
     block_size_bytes: usize,
     block_write_fn: &BlockWithReferenceWriteFn,
 ) -> Result<Vec<ReferenceKeyPair>, BlockStorageError> {
     let mut output_rk_pairs: Vec<ReferenceKeyPair> = Vec::new();
     for node in RKPairPacker::new(input_pairs, arity(block_size_bytes)) {
-        match encrypt_block(&node, convergence_secret) {
+        match encrypt_internal_node(&node, level) {
             EncryptBlockReturn {
                 encrypted_block,
                 reference,
@@ -216,16 +232,11 @@ pub fn encode(
         Ok(SplitContentReturn { rk_pairs }) => {
             let mut rk_pairs: Vec<ReferenceKeyPair> = Vec::from(rk_pairs);
             while rk_pairs.len() > 1 {
-                match collect_rk_pairs(
-                    rk_pairs,
-                    convergence_secret,
-                    block_size_bytes,
-                    block_write_fn,
-                ) {
+                level += 1;
+                match collect_rk_pairs(rk_pairs, level, block_size_bytes, block_write_fn) {
                     Ok(pairs) => rk_pairs = pairs,
                     Err(e) => return Err(e),
                 }
-                level += 1;
             }
             return Ok(ReadCapability {
                 level: level,
@@ -241,6 +252,7 @@ pub fn encode(
 mod tests {
     use super::*;
     use crate::constants::REFKEY_SIZE_BYTES;
+    use crate::tests::vectors::read_positive_test_vectors;
     use crate::types::BlockStorageError;
     use hex_literal::hex;
     use std::cmp::{max, min};
@@ -248,15 +260,14 @@ mod tests {
     use std::io::Cursor;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender};
-    use std::thread;
-    use crate::tests::vectors::read_test_vectors;
+    use std::{thread, vec};
 
     #[test]
     fn test_encrypt() {
         let test_data = hex!("5dc2de4e32d5a8855d24fb452a83a035c73bd295b766cd4b9a07060917ebe38b");
         let convergence_secret =
             hex!("d8ae7bfb1dd49edbe5fdefbf1eebe911a22e06d66a1091519e61a8650ca7a8a1");
-        let result = encrypt_block(&test_data, &convergence_secret);
+        let result = encrypt_leaf_node(&test_data, &convergence_secret);
         assert_ne!(result.encrypted_block, test_data);
     }
 
@@ -286,9 +297,31 @@ mod tests {
             let to_read = min(max(self.max - self.read_total, 0), buf.len());
             self.cipher.apply_keystream(&mut buf[0..to_read]);
             self.read_total += to_read;
-            self.count+=1;
+            self.count += 1;
             return Ok(to_read);
         }
+    }
+
+    #[test]
+    fn test_hello_world() {
+        let payload = "Hello world!";
+        let block_size = BlockSize::Size1KiB;
+        let convergence_secret: [u8; 32] = Default::default();
+        let write_fn =
+            move |block_with_reference: BlockWithReference| -> Result<usize, BlockStorageError> {
+                let size = block_with_reference.block.len();
+                Ok(size)
+            };
+
+        let read_capability = encode(
+            &mut payload.as_bytes(),
+            &convergence_secret,
+            block_size,
+            &write_fn,
+        )
+        .unwrap();
+        let encoded_urn = read_capability.to_urn();
+        assert_eq!(encoded_urn, "urn:eris:BIAD77QDJMFAKZYH2DXBUZYAP3MXZ3DJZVFYQ5DFWC6T65WSFCU5S2IT4YZGJ7AC4SYQMP2DM2ANS2ZTCP3DJJIRV733CRAAHOSWIYZM3M");
     }
 
     #[test]
@@ -296,7 +329,7 @@ mod tests {
     fn test_chacha20_reader_100MiB() {
         let name = "chachacha";
         let key = blake2b256_hash(name.as_bytes(), None);
-        let size = 100*1024*1024;
+        let size = 100 * 1024 * 1024;
         let mut reader = ChaCha20ZeroReader::new(size, &key);
         let mut read_total = 0;
         let mut first_block = Vec::new();
@@ -320,11 +353,11 @@ mod tests {
         }
         assert_eq!(read_total, size);
         let exp_first_ten_b32 = "OQTYRF453ZMTSPSY";
-        let exp_last_ten_b32  = "6SEHZ3OIUBEYPXMT";
+        let exp_last_ten_b32 = "6SEHZ3OIUBEYPXMT";
 
         let base32_alphabet = base32::Alphabet::RFC4648 { padding: false };
         let first_ten_b32 = base32::encode(base32_alphabet, &first_block[0..10]);
-        let last_ten_b32 = base32::encode(base32_alphabet, &last_block[last_block.len()-10..]);
+        let last_ten_b32 = base32::encode(base32_alphabet, &last_block[last_block.len() - 10..]);
         assert_eq!(exp_first_ten_b32, first_ten_b32);
         assert_eq!(exp_last_ten_b32, last_ten_b32);
     }
@@ -342,22 +375,22 @@ mod tests {
             LargePayload{
                 name: "100MiB (block size 1KiB)".to_owned(),
                 size: 100*1024*1024, // 100MiB
-                urn: "urn:erisx2:BICXPZNDNXFLO4IOMF6VIV2ZETGUJEUU7GN4AHPWNKEN6KJMCNP6YNUMVW2SCGZUJ4L3FHIXVECRZQ3QSBOTYPGXHN2WRBMB27NXDTAP24".to_owned(),
+                urn: "urn:eris:BIC6F5EKY2PMXS2VNOKPD3AJGKTQBD3EXSCSLZIENXAXBM7PCTH2TCMF5OKJWAN36N4DFO6JPFZBR3MS7ECOGDYDERIJJ4N5KAQSZS67YY".to_owned(),
                 block_size: BlockSize::Size1KiB
             },
             LargePayload{
                 name: "1GiB (block size 32KiB)".to_owned(),
                 size: 1024*1024*1024, // 1GiB
-                urn: "urn:erisx2:B4BFG37LU5BM5N3LXNPNMGAOQPZ5QTJAV22XEMX3EMSAMTP7EWOSD2I7AGEEQCTEKDQX7WCKGM6KQ5ALY5XJC4LMOYQPB2ZAFTBNDB6FAA".to_owned(),
+                urn: "urn:eris:B4BL4DKSEOPGMYS2CU2OFNYCH4BGQT774GXKGURLFO5FDXAQQPJGJ35AZR3PEK6CVCV74FVTAXHRSWLUUNYYA46ZPOPDOV2M5NVLBETWVI".to_owned(),
                 block_size: BlockSize::Size32KiB
             },
             // Takes a long time to complete
-            //LargePayload{
-            //    name: "256GiB (block size 32KiB)".to_owned(),
-            //    size: 256*1024*1024*1024, // 1GiB
-            //    urn: "urn:erisx2:B4BZHI55XJYINGLXWKJKZHBIXN6RSNDU233CY3ELFSTQNSVITBSVXGVGBKBCS4P4M5VSAUOZSMVAEC2VDFQTI5SEYVX4DN53FTJENWX4KU".to_owned(),
-            //    block_size: BlockSize::Size32KiB
-            //}
+            LargePayload{
+                name: "256GiB (block size 32KiB)".to_owned(),
+                size: 256*1024*1024*1024, // 1GiB
+                urn: "urn:eris:B4B5DNZVGU4QDCN7TAYWQZE5IJ6ESAOESEVYB5PPWFWHE252OY4X5XXJMNL4JMMFMO5LNITC7OGCLU4IOSZ7G6SA5F2VTZG2GZ5UCYFD5E".to_owned(),
+                block_size: BlockSize::Size32KiB
+            }
         ];
 
         for payload in payloads {
@@ -371,7 +404,13 @@ mod tests {
                 Ok(size)
             };
             let convergence_secret: [u8; 32] = Default::default();
-            let res = encode(&mut reader, &convergence_secret, payload.block_size, &write_fn).unwrap();
+            let res = encode(
+                &mut reader,
+                &convergence_secret,
+                payload.block_size,
+                &write_fn,
+            )
+            .unwrap();
             let encoded_urn = res.to_urn();
             assert_eq!(payload.urn, encoded_urn);
         }
@@ -382,7 +421,7 @@ mod tests {
         let name = "Hello World!";
         let key = blake2b256_hash(name.as_bytes(), None);
         let size = 1024; // 1 kb
-        let urn = "urn:erisx2:BIASC77CCCHLMNC2TFDQMCZ2747ZQGIJJPRFMCDQC7K3LBITVOVDHA3EDSZD3HSDLOOLBO5LYWTAWCEZ2O4X65KXB6Y3TESHVVVIVOEEYM";
+        let urn = "urn:eris:BIAVWP2IZZ2A3WNGPMDSGFE2FJUHFYSEOKKM76DOA2J2XYLOUBSINJEVFKDT2VKH4BVNQPGZVZZTFSK5JFUZ3FTKXVX6TYCZY762UYZYG4";
         let block_size = BlockSize::Size1KiB;
 
         let mut reader = ChaCha20ZeroReader::new(size, &key);
@@ -404,7 +443,7 @@ mod tests {
     fn test_chacha_reader() {
         let name = "ChaCha!";
         let key = blake2b256_hash(name.as_bytes(), None);
-        let size = 10*1024; // 10 kb
+        let size = 10 * 1024; // 10 kb
         let block_size = BlockSize::Size1KiB;
 
         let mut reader = ChaCha20ZeroReader::new(size, &key);
@@ -432,19 +471,21 @@ mod tests {
             }
         }
         let mut reader2 = Cursor::new(cha_cha_content);
-        let res_indirect = encode(&mut reader2, &convergence_secret, block_size, &write_fn).unwrap();
+        let res_indirect =
+            encode(&mut reader2, &convergence_secret, block_size, &write_fn).unwrap();
         let urn_indirect = res_indirect.to_urn();
         assert_eq!(urn_direct, urn_indirect);
     }
 
     #[test]
     fn test_encode() {
-        let test_vectors = read_test_vectors();
+        let test_vectors = read_positive_test_vectors();
         for vector in test_vectors {
             println!("Running vector {}", vector.file_name);
 
             let base32_alphabet = base32::Alphabet::RFC4648 { padding: false };
             let content = base32::decode(base32_alphabet, &vector.data.content).unwrap();
+
             let mut cursor = Cursor::new(content);
             let convergence_secret =
                 base32::decode(base32_alphabet, &vector.data.convergence_secret).unwrap();
@@ -488,14 +529,14 @@ mod tests {
 
             let b32_root_key = base32::encode(base32_alphabet, &result.root.key);
             let b32_root_ref = base32::encode(base32_alphabet, &result.root.reference);
-
             assert_eq!(vector.data.blocks.len(), generated_blocks.len());
             assert_eq!(vector.data.read_capability.level, result.level);
             assert_eq!(vector.data.read_capability.root_reference, b32_root_ref);
             assert_eq!(vector.data.read_capability.root_key, b32_root_key);
 
             for block in &generated_blocks {
-                assert_eq!(block.1.len(), vector.data.block_size);
+                let bs_usize: usize = block_size.into();
+                assert_eq!(block.1.len(), bs_usize);
             }
             for (_, block) in generated_blocks.iter().enumerate() {
                 let reference = blake2b256_hash(&block.1, None);

@@ -1,6 +1,6 @@
-use std::convert::TryInto;
-use crate::constants::{REF_SIZE_BYTES, KEY_SIZE_BYTES, READ_CAPABILITY_URN_BYTES};
+use crate::constants::{KEY_SIZE_BYTES, READ_CAPABILITY_URN_BYTES, REF_SIZE_BYTES};
 use std::convert::TryFrom;
+use std::convert::TryInto;
 
 pub type Reference = [u8; REF_SIZE_BYTES];
 pub type Key = [u8; KEY_SIZE_BYTES];
@@ -20,7 +20,7 @@ pub struct BlockWithReference {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum BlockSize {
     Size1KiB,
-    Size32KiB
+    Size32KiB,
 }
 
 const BLOCK_SIZE_1KIB: u8 = 0x0a;
@@ -33,7 +33,7 @@ impl TryFrom<u8> for BlockSize {
         match v {
             BLOCK_SIZE_1KIB => Ok(BlockSize::Size1KiB),
             BLOCK_SIZE_32KIB => Ok(BlockSize::Size32KiB),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
@@ -42,7 +42,7 @@ impl Into<u8> for BlockSize {
     fn into(self) -> u8 {
         match self {
             BlockSize::Size1KiB => BLOCK_SIZE_1KIB,
-            BlockSize::Size32KiB => BLOCK_SIZE_32KIB
+            BlockSize::Size32KiB => BLOCK_SIZE_32KIB,
         }
     }
 }
@@ -54,7 +54,7 @@ impl TryFrom<usize> for BlockSize {
         match v {
             1024 => Ok(BlockSize::Size1KiB),
             32768 => Ok(BlockSize::Size32KiB),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
@@ -63,7 +63,7 @@ impl Into<usize> for BlockSize {
     fn into(self) -> usize {
         match self {
             BlockSize::Size1KiB => 1024,
-            BlockSize::Size32KiB => 32768
+            BlockSize::Size32KiB => 32768,
         }
     }
 }
@@ -72,7 +72,7 @@ impl Into<usize> for BlockSize {
 pub struct ReadCapability {
     pub block_size: BlockSize,
     pub level: u8,
-    pub root: ReferenceKeyPair
+    pub root: ReferenceKeyPair,
 }
 
 impl ReadCapability {
@@ -97,17 +97,17 @@ impl ReadCapability {
                 let mut key: [u8; KEY_SIZE_BYTES] = Default::default();
                 key.copy_from_slice(&data[34..66]);
                 reference.copy_from_slice(&data[2..34]);
-                let root = ReferenceKeyPair{
+                let root = ReferenceKeyPair {
                     reference: reference,
                     key: key,
                 };
-                return Some(ReadCapability{
+                return Some(ReadCapability {
                     block_size: block_size,
                     level: level,
                     root: root,
-                })
+                });
             }
-            Err(_) => return None
+            Err(_) => return None,
         }
     }
 }
@@ -116,3 +116,5 @@ pub type BlockStorageError = std::io::Error;
 pub type BlockStorageErrorKind = std::io::ErrorKind;
 pub type BlockStorageGetFn = dyn Fn(Reference) -> Result<Vec<u8>, BlockStorageError>;
 pub type BlockWithReferenceWriteFn = dyn Fn(BlockWithReference) -> Result<usize, BlockStorageError>;
+pub type NodeParsingError = std::io::Error;
+pub type NodeParsingErrorKind = std::io::ErrorKind;
