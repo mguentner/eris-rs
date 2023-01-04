@@ -83,7 +83,7 @@ impl ReadCapability {
         res[1] = self.level;
         res[2..34].copy_from_slice(&self.root.reference);
         res[34..].copy_from_slice(&self.root.key);
-        return res;
+        res
     }
 
     pub fn from_bytes(data: &[u8]) -> Option<ReadCapability> {
@@ -97,17 +97,14 @@ impl ReadCapability {
                 let mut key: [u8; KEY_SIZE_BYTES] = Default::default();
                 key.copy_from_slice(&data[34..66]);
                 reference.copy_from_slice(&data[2..34]);
-                let root = ReferenceKeyPair {
-                    reference: reference,
-                    key: key,
-                };
-                return Some(ReadCapability {
-                    block_size: block_size,
-                    level: level,
-                    root: root,
-                });
+                let root = ReferenceKeyPair { reference, key };
+                Some(ReadCapability {
+                    block_size,
+                    level,
+                    root,
+                })
             }
-            Err(_) => return None,
+            Err(_) => None,
         }
     }
 }

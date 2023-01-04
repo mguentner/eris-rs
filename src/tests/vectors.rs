@@ -28,10 +28,7 @@ impl TryInto<ReadCapability> for ReadCapabilityTest {
                     let mut key: [u8; KEY_SIZE_BYTES] = Default::default();
                     key.copy_from_slice(&root_key);
                     reference.copy_from_slice(&root_reference);
-                    let root = ReferenceKeyPair {
-                        reference: reference,
-                        key: key,
-                    };
+                    let root = ReferenceKeyPair { reference, key };
                     let block_size = match self.block_size {
                         1024 => BlockSize::Size1KiB,
                         32768 => BlockSize::Size32KiB,
@@ -39,8 +36,8 @@ impl TryInto<ReadCapability> for ReadCapabilityTest {
                     };
                     Ok(ReadCapability {
                         level: self.level,
-                        block_size: block_size,
-                        root: root,
+                        block_size,
+                        root,
                     })
                 }
                 None => Err(()),
@@ -102,7 +99,7 @@ pub struct NegativeTestVector {
 }
 
 pub fn read_positive_test_vectors() -> Vec<PositiveTestVector> {
-    return std::fs::read_dir("./src/tests/eris-test-vectors")
+    std::fs::read_dir("./src/tests/eris-test-vectors")
         .unwrap()
         .map(|res_path| match res_path {
             Ok(path) => {
@@ -142,20 +139,20 @@ pub fn read_positive_test_vectors() -> Vec<PositiveTestVector> {
                         _ => return None,
                     }
                 }
-                return None;
+                None
             }
             Err(_) => {
                 println!("Error reading test vectors");
-                return None;
+                None
             }
         })
         .filter(|x| x.is_some())
         .map(|x| x.unwrap())
-        .collect();
+        .collect()
 }
 
 pub fn read_negative_test_vectors() -> Vec<NegativeTestVector> {
-    return std::fs::read_dir("./src/tests/eris-test-vectors")
+    std::fs::read_dir("./src/tests/eris-test-vectors")
         .unwrap()
         .map(|res_path| match res_path {
             Ok(path) => {
@@ -195,14 +192,14 @@ pub fn read_negative_test_vectors() -> Vec<NegativeTestVector> {
                         _ => return None,
                     }
                 }
-                return None;
+                None
             }
             Err(_) => {
                 println!("Error reading test vectors");
-                return None;
+                None
             }
         })
         .filter(|x| x.is_some())
         .map(|x| x.unwrap())
-        .collect();
+        .collect()
 }

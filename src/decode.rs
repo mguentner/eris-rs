@@ -19,7 +19,7 @@ pub fn decrypt_block(block: &[u8], level: u8, key: &[u8]) -> Vec<u8> {
     let nonce = Nonce::from_slice(nonce_slice);
     let mut cipher = ChaCha20::new(key, nonce);
     cipher.apply_keystream(&mut vec);
-    return vec;
+    vec
 }
 
 struct RKPairUnpacker {
@@ -29,10 +29,7 @@ struct RKPairUnpacker {
 
 impl RKPairUnpacker {
     fn new(block: Vec<u8>) -> RKPairUnpacker {
-        RKPairUnpacker {
-            block: block,
-            count: 0,
-        }
+        RKPairUnpacker { block, count: 0 }
     }
 }
 
@@ -68,12 +65,7 @@ impl Iterator for RKPairUnpacker {
                     ))),
                 }
             }
-            _ => {
-                return Some(Ok(ReferenceKeyPair {
-                    reference: reference,
-                    key: key,
-                }))
-            }
+            _ => Some(Ok(ReferenceKeyPair { reference, key })),
         }
     }
 }
@@ -122,7 +114,7 @@ fn decode_recurse_all_rk_pairs(
             Err(e) => return Err(e),
         }
     }
-    return Ok(result);
+    Ok(result)
 }
 
 fn unpad(input: &Vec<u8>) -> Result<&[u8], BlockStorageError> {
@@ -138,10 +130,10 @@ fn unpad(input: &Vec<u8>) -> Result<&[u8], BlockStorageError> {
             ));
         }
     }
-    return Err(BlockStorageError::new(
+    Err(BlockStorageError::new(
         BlockStorageErrorKind::InvalidData,
         "no valid padding found",
-    ));
+    ))
 }
 
 pub fn decode(
@@ -195,7 +187,7 @@ pub fn decode(
             Err(e) => return Err(e),
         }
     }
-    return Ok(bytes_written);
+    Ok(bytes_written)
 }
 
 #[cfg(test)]
@@ -234,19 +226,17 @@ mod tests {
                 move |reference: Reference| -> Result<Vec<u8>, BlockStorageError> {
                     let b32_ref = base32::encode(base32_alphabet, &reference);
                     match blocks.get(&b32_ref) {
-                        Some(block) => match base32::decode(base32_alphabet, &block) {
-                            Some(d) => return Ok(d),
+                        Some(block) => match base32::decode(base32_alphabet, block) {
+                            Some(d) => Ok(d),
                             None => Err(BlockStorageError::new(
                                 BlockStorageErrorKind::InvalidData,
                                 "could not decode data",
                             )),
                         },
-                        None => {
-                            return Err(BlockStorageError::new(
-                                BlockStorageErrorKind::NotFound,
-                                "could not retrieve block",
-                            ))
-                        }
+                        None => Err(BlockStorageError::new(
+                            BlockStorageErrorKind::NotFound,
+                            "could not retrieve block",
+                        )),
                     }
                 };
 
@@ -270,7 +260,7 @@ mod tests {
                         0
                     );
                 }
-                Err(e) => panic!("Expected the test to succeed. Got {:?}", e),
+                Err(e) => panic!("Expected the test to succeed. Got {e:?}"),
             }
         }
     }
@@ -301,19 +291,17 @@ mod tests {
                 move |reference: Reference| -> Result<Vec<u8>, BlockStorageError> {
                     let b32_ref = base32::encode(base32_alphabet, &reference);
                     match blocks.get(&b32_ref) {
-                        Some(block) => match base32::decode(base32_alphabet, &block) {
-                            Some(d) => return Ok(d),
+                        Some(block) => match base32::decode(base32_alphabet, block) {
+                            Some(d) => Ok(d),
                             None => Err(BlockStorageError::new(
                                 BlockStorageErrorKind::InvalidData,
                                 "could not decode data",
                             )),
                         },
-                        None => {
-                            return Err(BlockStorageError::new(
-                                BlockStorageErrorKind::NotFound,
-                                "could not retrieve block",
-                            ))
-                        }
+                        None => Err(BlockStorageError::new(
+                            BlockStorageErrorKind::NotFound,
+                            "could not retrieve block",
+                        )),
                     }
                 };
             let content: Vec<u8> = Vec::new();

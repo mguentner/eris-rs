@@ -15,7 +15,7 @@ fn arity(block_size_bytes: usize) -> usize {
             REF_SIZE_BYTES + KEY_SIZE_BYTES
         );
     }
-    return block_size_bytes / (REF_SIZE_BYTES + KEY_SIZE_BYTES);
+    block_size_bytes / (REF_SIZE_BYTES + KEY_SIZE_BYTES)
 }
 
 fn blake2b256_hash(input: &[u8], key: Option<&[u8]>) -> [u8; REFKEY_SIZE_BYTES] {
@@ -26,7 +26,7 @@ fn blake2b256_hash(input: &[u8], key: Option<&[u8]>) -> [u8; REFKEY_SIZE_BYTES] 
     hasher.update(input);
     let mut result: [u8; REFKEY_SIZE_BYTES] = Default::default();
     result.copy_from_slice(hasher.finalize().as_bytes());
-    return result;
+    result
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@ impl ReadCapability {
         let base32_alphabet = base32::Alphabet::RFC4648 { padding: false };
         let bytes = self.to_bytes();
         let read_capability_base32 = base32::encode(base32_alphabet, &bytes);
-        return "urn:eris:".to_owned() + &read_capability_base32;
+        "urn:eris:".to_owned() + &read_capability_base32
     }
 
     pub fn from_urn(urn: String) -> Option<ReadCapability> {
@@ -13,9 +13,7 @@ impl ReadCapability {
         match urn.split_once("urn:eris:") {
             Some((_, reference_base32)) => {
                 match base32::decode(base32_alphabet, reference_base32) {
-                    Some(bytes) => {
-                        return ReadCapability::from_bytes(&bytes);
-                    }
+                    Some(bytes) => ReadCapability::from_bytes(&bytes),
                     None => None,
                 }
             }

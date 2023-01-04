@@ -30,11 +30,11 @@ fn encrypt_leaf_node(input: &[u8], convergence_secret: &[u8]) -> EncryptBlockRet
     cipher.apply_keystream(&mut encrypted_block);
     let reference = blake2b256_hash(&encrypted_block, None);
 
-    return EncryptBlockReturn {
-        encrypted_block: encrypted_block,
-        reference: reference,
+    EncryptBlockReturn {
+        encrypted_block,
+        reference,
         key: *key_slice,
-    };
+    }
 }
 
 fn encrypt_internal_node(input: &[u8], level: u8) -> EncryptBlockReturn {
@@ -48,11 +48,11 @@ fn encrypt_internal_node(input: &[u8], level: u8) -> EncryptBlockReturn {
     cipher.apply_keystream(&mut encrypted_block);
     let reference = blake2b256_hash(&encrypted_block, None);
 
-    return EncryptBlockReturn {
-        encrypted_block: encrypted_block,
-        reference: reference,
+    EncryptBlockReturn {
+        encrypted_block,
+        reference,
         key: *key_slice,
-    };
+    }
 }
 
 struct SplitContentReturn {
@@ -64,13 +64,13 @@ fn pad(input: &mut Vec<u8>, start_index: usize) -> Option<Vec<u8>> {
         let mut vec = Vec::with_capacity(input.len());
         vec.fill(0);
         vec[0] = 0x80;
-        return Some(vec);
+        Some(vec)
     } else {
         input[start_index] = 0x80;
-        for i in start_index + 1..input.len() {
-            input[i] = 0x00;
+        for i in input.iter_mut().skip(start_index + 1) {
+            *i = 0x00;
         }
-        return None;
+        None
     }
 }
 
@@ -88,8 +88,7 @@ fn split_content(
         let mut bytes_read = 0;
         let mut last_block = false;
         let mut blocks_to_write: Vec<&Vec<u8>> = Vec::new();
-        let mut buffer: Vec<u8> = Vec::with_capacity(block_size_bytes);
-        buffer.resize(block_size_bytes, 0);
+        let mut buffer: Vec<u8> = vec![0; block_size_bytes];
 
         while bytes_read < block_size_bytes {
             let n = match content.read(&mut buffer[bytes_read..]) {
@@ -103,30 +102,26 @@ fn split_content(
             bytes_read += n;
         }
         if last_block {
-            match pad(&mut buffer, bytes_read) {
-                Some(last_block) => {
-                    last_buffer.copy_from_slice(&last_block);
-                    blocks_to_write.push(&last_buffer);
-                }
-                None => {}
+            if let Some(last_block) = pad(&mut buffer, bytes_read) {
+                last_buffer.copy_from_slice(&last_block);
+                blocks_to_write.push(&last_buffer);
             }
         }
         blocks_to_write.push(&buffer);
         for block in blocks_to_write {
-            match encrypt_leaf_node(block, convergence_secret) {
-                EncryptBlockReturn {
-                    encrypted_block,
-                    reference,
-                    key,
-                } => {
-                    let rk_pair = ReferenceKeyPair { reference, key };
-                    match block_write_fn(BlockWithReference {
-                        block: encrypted_block,
-                        reference: rk_pair.reference,
-                    }) {
-                        Ok(_) => rk_pairs.push(rk_pair),
-                        Err(e) => return Err(e),
-                    }
+            let EncryptBlockReturn {
+                encrypted_block,
+                reference,
+                key,
+            } = encrypt_leaf_node(block, convergence_secret);
+            {
+                let rk_pair = ReferenceKeyPair { reference, key };
+                match block_write_fn(BlockWithReference {
+                    block: encrypted_block,
+                    reference: rk_pair.reference,
+                }) {
+                    Ok(_) => rk_pairs.push(rk_pair),
+                    Err(e) => return Err(e),
                 }
             }
         }
@@ -134,7 +129,7 @@ fn split_content(
             break;
         }
     }
-    Ok(SplitContentReturn { rk_pairs: rk_pairs })
+    Ok(SplitContentReturn { rk_pairs })
 }
 
 struct RKPairPacker {
@@ -146,8 +141,8 @@ struct RKPairPacker {
 impl RKPairPacker {
     fn new(pairs: Vec<ReferenceKeyPair>, arity: usize) -> RKPairPacker {
         RKPairPacker {
-            pairs: pairs,
-            arity: arity,
+            pairs,
+            arity,
             cycle: 0,
         }
     }
@@ -178,7 +173,7 @@ impl Iterator for RKPairPacker {
             }
         }
         self.cycle += 1;
-        return Some(result);
+        Some(result)
     }
 }
 
@@ -190,24 +185,23 @@ fn collect_rk_pairs(
 ) -> Result<Vec<ReferenceKeyPair>, BlockStorageError> {
     let mut output_rk_pairs: Vec<ReferenceKeyPair> = Vec::new();
     for node in RKPairPacker::new(input_pairs, arity(block_size_bytes)) {
-        match encrypt_internal_node(&node, level) {
-            EncryptBlockReturn {
-                encrypted_block,
-                reference,
-                key,
-            } => {
-                let rk_pair = ReferenceKeyPair { reference, key };
-                match block_write_fn(BlockWithReference {
-                    block: encrypted_block,
-                    reference: rk_pair.reference,
-                }) {
-                    Ok(_) => output_rk_pairs.push(rk_pair),
-                    Err(e) => return Err(e),
-                }
+        let EncryptBlockReturn {
+            encrypted_block,
+            reference,
+            key,
+        } = encrypt_internal_node(&node, level);
+        {
+            let rk_pair = ReferenceKeyPair { reference, key };
+            match block_write_fn(BlockWithReference {
+                block: encrypted_block,
+                reference: rk_pair.reference,
+            }) {
+                Ok(_) => output_rk_pairs.push(rk_pair),
+                Err(e) => return Err(e),
             }
         }
     }
-    return Ok(output_rk_pairs);
+    Ok(output_rk_pairs)
 }
 
 pub fn encode(
@@ -230,7 +224,7 @@ pub fn encode(
         block_write_fn,
     ) {
         Ok(SplitContentReturn { rk_pairs }) => {
-            let mut rk_pairs: Vec<ReferenceKeyPair> = Vec::from(rk_pairs);
+            let mut rk_pairs: Vec<ReferenceKeyPair> = rk_pairs;
             while rk_pairs.len() > 1 {
                 level += 1;
                 match collect_rk_pairs(rk_pairs, level, block_size_bytes, block_write_fn) {
@@ -238,13 +232,13 @@ pub fn encode(
                     Err(e) => return Err(e),
                 }
             }
-            return Ok(ReadCapability {
-                level: level,
+            Ok(ReadCapability {
+                level,
                 root: rk_pairs[0],
-                block_size: block_size,
-            });
+                block_size,
+            })
         }
-        Err(e) => return Err(e),
+        Err(e) => Err(e),
     }
 }
 
@@ -255,7 +249,6 @@ mod tests {
     use crate::tests::vectors::read_positive_test_vectors;
     use crate::types::BlockStorageError;
     use hex_literal::hex;
-    use std::cmp::{max, min};
     use std::collections::HashMap;
     use std::io::Cursor;
     use std::sync::mpsc;
@@ -284,7 +277,7 @@ mod tests {
             let nonce = Nonce::from_slice(&[0; 12]);
             let chacha_key = ChaChaKey::from_slice(key);
             ChaCha20ZeroReader {
-                max: max,
+                max,
                 read_total: 0,
                 cipher: ChaCha20::new(chacha_key, nonce),
                 count: 0,
@@ -294,11 +287,11 @@ mod tests {
 
     impl Read for ChaCha20ZeroReader {
         fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
-            let to_read = min(max(self.max - self.read_total, 0), buf.len());
+            let to_read = (self.max - self.read_total).clamp(0, buf.len());
             self.cipher.apply_keystream(&mut buf[0..to_read]);
             self.read_total += to_read;
             self.count += 1;
-            return Ok(to_read);
+            Ok(to_read)
         }
     }
 
@@ -340,7 +333,7 @@ mod tests {
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(s) => {
-                    if first_block.len() == 0 {
+                    if first_block.is_empty() {
                         first_block.extend_from_slice(&buf[..s])
                     }
                     last_block.extend_from_slice(&buf[..s]);
@@ -514,15 +507,9 @@ mod tests {
                 return_tx.send(res.unwrap()).unwrap();
             });
 
-            loop {
-                match block_rx.recv() {
-                    Ok(block_with_reference) => {
-                        let b32_ref =
-                            base32::encode(base32_alphabet, &block_with_reference.reference);
-                        generated_blocks.insert(b32_ref, block_with_reference.block);
-                    }
-                    Err(_) => break,
-                }
+            while let Ok(block_with_reference) = block_rx.recv() {
+                let b32_ref = base32::encode(base32_alphabet, &block_with_reference.reference);
+                generated_blocks.insert(b32_ref, block_with_reference.block);
             }
             let result = return_rx.recv().unwrap();
             encoder.join().unwrap();
@@ -539,9 +526,9 @@ mod tests {
                 assert_eq!(block.1.len(), bs_usize);
             }
             for (_, block) in generated_blocks.iter().enumerate() {
-                let reference = blake2b256_hash(&block.1, None);
+                let reference = blake2b256_hash(block.1, None);
                 let b32_reference = base32::encode(base32_alphabet, &reference);
-                assert_eq!(vector.data.blocks.contains_key(&b32_reference), true);
+                assert!(vector.data.blocks.contains_key(&b32_reference));
             }
         }
     }
