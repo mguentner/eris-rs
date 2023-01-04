@@ -368,13 +368,13 @@ mod tests {
                 urn: "urn:eris:B4BL4DKSEOPGMYS2CU2OFNYCH4BGQT774GXKGURLFO5FDXAQQPJGJ35AZR3PEK6CVCV74FVTAXHRSWLUUNYYA46ZPOPDOV2M5NVLBETWVI".to_owned(),
                 block_size: BlockSize::Size32KiB
             },
-            // Takes a long time to complete
-            LargePayload{
-                name: "256GiB (block size 32KiB)".to_owned(),
-                size: 256*1024*1024*1024, // 1GiB
-                urn: "urn:eris:B4B5DNZVGU4QDCN7TAYWQZE5IJ6ESAOESEVYB5PPWFWHE252OY4X5XXJMNL4JMMFMO5LNITC7OGCLU4IOSZ7G6SA5F2VTZG2GZ5UCYFD5E".to_owned(),
-                block_size: BlockSize::Size32KiB
-            }
+            //// Takes a long time to complete
+            //LargePayload{
+            //    name: "256GiB (block size 32KiB)".to_owned(),
+            //    size: 256*1024*1024*1024, // 1GiB
+            //    urn: "urn:eris:B4B5DNZVGU4QDCN7TAYWQZE5IJ6ESAOESEVYB5PPWFWHE252OY4X5XXJMNL4JMMFMO5LNITC7OGCLU4IOSZ7G6SA5F2VTZG2GZ5UCYFD5E".to_owned(),
+            //    block_size: BlockSize::Size32KiB
+            //}
         ];
 
         for payload in payloads {
