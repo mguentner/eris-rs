@@ -1,7 +1,7 @@
 [package]
 name = "eris-rs"
 description = "rust implementation of the Encoding for Robust Immutable Storage (ERIS) spec draft"
-version = "0.1.1"
+version = "1.0.0"
 authors = ["Maximilian Güntner <code@sourcediver.org>"]
 edition = "2021"
 license = "AGPL-3.0-only"
