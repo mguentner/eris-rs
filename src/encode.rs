@@ -20,26 +20,9 @@ struct EncryptBlockReturn {
     key: Key,
 }
 
-fn encrypt_leaf_node(input: &[u8], convergence_secret: &[u8]) -> EncryptBlockReturn {
-    let key_slice = &blake2b256_hash(input, Some(convergence_secret));
-    let key = ChaChaKey::from_slice(key_slice);
-    let nonce = Nonce::from_slice(&[0; 12]); // 96-bit is set to zero, section 2.1.2
-
-    let mut encrypted_block = Vec::from(input);
-    let mut cipher = ChaCha20::new(key, nonce);
-    cipher.apply_keystream(&mut encrypted_block);
-    let reference = blake2b256_hash(&encrypted_block, None);
-
-    EncryptBlockReturn {
-        encrypted_block,
-        reference,
-        key: *key_slice,
-    }
-}
-
-fn encrypt_internal_node(input: &[u8], level: u8) -> EncryptBlockReturn {
-    let key_slice = &blake2b256_hash(input, None);
-    let key = ChaChaKey::from_slice(key_slice);
+fn encrypt_node(input: &[u8], level: u8, convergence_secret: Option<&[u8]>) -> EncryptBlockReturn {
+    let key_slice = blake2b256_hash(input, convergence_secret);
+    let key = ChaChaKey::from_slice(&key_slice);
     let nonce_slice = &[level, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     let nonce = Nonce::from_slice(nonce_slice);
 
@@ -51,8 +34,16 @@ fn encrypt_internal_node(input: &[u8], level: u8) -> EncryptBlockReturn {
     EncryptBlockReturn {
         encrypted_block,
         reference,
-        key: *key_slice,
+        key: key_slice,
     }
+}
+
+fn encrypt_internal_node(input: &[u8], level: u8) -> EncryptBlockReturn {
+    encrypt_node(input, level, None)
+}
+
+fn encrypt_leaf_node(input: &[u8], convergence_secret: &[u8]) -> EncryptBlockReturn {
+    encrypt_node(input, 0, Some(convergence_secret))
 }
 
 struct SplitContentReturn {
