@@ -3,8 +3,7 @@ use crate::types::BlockStorageError;
 use crate::types::ReadCapability;
 use std::io::Read;
 
-use chacha20::cipher::NewCipher;
-use chacha20::cipher::StreamCipher;
+use chacha20::cipher::{KeyIvInit, StreamCipher};
 use chacha20::{ChaCha20, Key as ChaChaKey, Nonce};
 
 use crate::arity;

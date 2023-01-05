@@ -1,5 +1,4 @@
-use chacha20::cipher::NewCipher;
-use chacha20::cipher::StreamCipher;
+use chacha20::cipher::{KeyIvInit, StreamCipher};
 use chacha20::{ChaCha20, Key as ChaChaKey, Nonce};
 use std::io::Write;
 
